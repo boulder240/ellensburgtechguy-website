@@ -145,7 +145,9 @@ input:invalid:not(:placeholder-shown),textarea:invalid:not(:placeholder-shown){b
 footer{background:var(--navy-deep);color:var(--slate);padding:32px 0;font-size:.88rem}
 footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center}
 footer a{color:var(--amber);text-decoration:none}
+.cf-turnstile{min-height:65px}
 </style>
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body id="top">
 
@@ -369,6 +371,7 @@ footer a{color:var(--amber);text-decoration:none}
         <input type="email" name="email" placeholder="Email" autocomplete="email" required>
         <input type="text" name="company" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
         <textarea name="message" placeholder="What do you need help with?" required></textarea>
+        <div class="cf-turnstile" data-sitekey="0x4AAAAAAECElxesK9egJSaI" data-theme="dark" data-size="flexible"></div>
         <button class="btn btn-amber" type="submit">Send Message</button>
         <p class="form-note">Your message goes straight to my inbox &mdash; I typically reply within one business day.</p>
       </form>
@@ -421,15 +424,24 @@ footer a{color:var(--amber);text-decoration:none}
   form.addEventListener('submit', function (ev) {
     ev.preventDefault();
 
+    var tokenField = form['cf-turnstile-response'];
     var data = {
       name: form.name.value.trim(),
       email: form.email.value.trim(),
       company: form.company.value,
-      message: form.message.value.trim()
+      message: form.message.value.trim(),
+      'cf-turnstile-response': tokenField ? tokenField.value : ''
     };
 
     if (!data.name || !data.email || !data.message) {
       show('Please fill in your name, email, and a short description of what you need.', true);
+      return;
+    }
+
+    /* Turnstile usually resolves before anyone finishes typing, but if the
+       widget is still working we say so rather than failing at the server. */
+    if (tokenField && !tokenField.value) {
+      show("Just a moment — still verifying you're human. Try again in a second.", true);
       return;
     }
 
@@ -449,6 +461,9 @@ footer a{color:var(--amber);text-decoration:none}
       .then(function (r) {
         if (r.ok && r.body.ok) {
           form.reset();
+          if (window.turnstile && typeof window.turnstile.reset === 'function') {
+            try { window.turnstile.reset(); } catch (e) {}
+          }
           show("Thanks, " + escapeHtml(data.name.split(' ')[0]) + "! Your message is in my inbox \u2014 I'll get back to you within one business day.", false);
           if (button) button.textContent = 'Message Sent';
           return;
@@ -467,6 +482,11 @@ footer a{color:var(--amber);text-decoration:none}
 
   function resetButton() {
     if (button) { button.disabled = false; button.textContent = originalLabel; }
+    /* Turnstile tokens are single-use. After any failed attempt the old token
+       is spent, so issue a fresh one or the retry is guaranteed to fail. */
+    if (window.turnstile && typeof window.turnstile.reset === 'function') {
+      try { window.turnstile.reset(); } catch (e) {}
+    }
   }
 
   function escapeHtml(s) {
