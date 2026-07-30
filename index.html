@@ -101,8 +101,12 @@ input::placeholder,textarea::placeholder{color:#9C9C97}
 textarea{min-height:120px;resize:vertical}
 form button{border:none;cursor:pointer;font-family:inherit;font-size:1rem}
 .form-note{font-size:.78rem;color:var(--slate)}
-.form-status{padding:14px 16px;border-radius:10px;background:var(--amber);color:var(--navy);font-weight:600;font-size:.95rem}
+.form-status{padding:14px 16px;border-radius:10px;background:var(--amber);color:var(--navy);font-weight:600;font-size:.95rem;line-height:1.45}
 .form-status.err{background:#8a2a1e;color:#F3F3EF}
+.form-status a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+form button[disabled]{opacity:.6;cursor:progress}
+form.sending input,form.sending textarea{opacity:.6}
+input:invalid:not(:placeholder-shown),textarea:invalid:not(:placeholder-shown){border-color:rgba(200,90,70,.75)}
 @media(max-width:820px){.contact-grid{grid-template-columns:1fr}}
 
 /* flashy bits */
@@ -359,10 +363,10 @@ footer a{color:var(--amber);text-decoration:none}
         <p class="line"><strong>Book:</strong> <a href="https://calendar.app.google/3VkEsvcShzt3MH4z7">Free consultation</a></p>
         <p style="margin-top:20px;font-size:.95rem">For cabling, Wi-Fi, cameras, and automation work, photos of the space are helpful.</p>
       </div>
-      <form method="POST" action="/api/contact" id="contact-form">
-        <div class="form-status" id="form-status" hidden></div>
-        <input type="text" name="name" placeholder="Name" required>
-        <input type="email" name="email" placeholder="Email" required>
+      <form method="POST" action="/api/contact" id="contact-form" novalidate>
+        <div class="form-status" id="form-status" role="status" aria-live="polite" hidden></div>
+        <input type="text" name="name" placeholder="Name" autocomplete="name" required>
+        <input type="email" name="email" placeholder="Email" autocomplete="email" required>
         <input type="text" name="company" tabindex="-1" autocomplete="off" style="position:absolute;left:-9999px" aria-hidden="true">
         <textarea name="message" placeholder="What do you need help with?" required></textarea>
         <button class="btn btn-amber" type="submit">Send Message</button>
@@ -385,15 +389,90 @@ footer a{color:var(--amber);text-decoration:none}
   document.querySelectorAll('.card,.step,section .wrap>h2,section .wrap>.eyebrow,.about .area,.banner h2,.banner .phone').forEach(function(el){
     el.classList.add('reveal'); io.observe(el);
   });
+  /* ---- Contact form ------------------------------------------------
+     Submits in the background so the visitor stays on the page and gets a
+     real answer either way. If JavaScript never runs, the form still does a
+     normal POST to /api/contact and the Function handles it. */
+  var form = document.getElementById('contact-form');
+  var status = document.getElementById('form-status');
+  if (!form || !status) return;
+
+  var button = form.querySelector('button[type="submit"]');
+  var originalLabel = button ? button.textContent : 'Send Message';
+  var PHONE_FALLBACK = ' Or call or text <a href="tel:+15095403176">509-540-3176</a>.';
+
+  function show(msg, isError) {
+    status.hidden = false;
+    status.innerHTML = msg;
+    status.classList.toggle('err', !!isError);
+  }
+
+  /* Covers the non-JS POST path, where the Function redirects back here
+     with a flag instead of returning JSON. */
   var q = new URLSearchParams(location.search);
-  if (q.has('sent') || q.has('error')) {
-    var s = document.getElementById('form-status');
-    if (s) {
-      s.hidden = false;
-      if (q.has('sent')) { s.textContent = "Thanks! Your message was sent \u2014 I'll get back to you soon."; }
-      else { s.textContent = "Something went wrong sending your message. Please call or email me instead."; s.classList.add('err'); }
-      document.getElementById('contact-form').scrollIntoView({behavior:'smooth', block:'center'});
+  if (q.has('sent')) {
+    show("Thanks! Your message is in my inbox — I'll get back to you within one business day.", false);
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } else if (q.has('error')) {
+    show('Something went wrong sending your message.' + PHONE_FALLBACK, true);
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+
+    var data = {
+      name: form.name.value.trim(),
+      email: form.email.value.trim(),
+      company: form.company.value,
+      message: form.message.value.trim()
+    };
+
+    if (!data.name || !data.email || !data.message) {
+      show('Please fill in your name, email, and a short description of what you need.', true);
+      return;
     }
+
+    form.classList.add('sending');
+    if (button) { button.disabled = true; button.textContent = 'Sending\u2026'; }
+    show('Sending your message\u2026', false);
+
+    fetch('/api/contact', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+      .then(function (res) {
+        return res.json().then(function (body) { return { ok: res.ok, body: body }; })
+                         .catch(function () { return { ok: res.ok, body: {} }; });
+      })
+      .then(function (r) {
+        if (r.ok && r.body.ok) {
+          form.reset();
+          show("Thanks, " + escapeHtml(data.name.split(' ')[0]) + "! Your message is in my inbox \u2014 I'll get back to you within one business day.", false);
+          if (button) button.textContent = 'Message Sent';
+          return;
+        }
+        show((r.body && r.body.error ? escapeHtml(r.body.error) : 'Something went wrong sending your message.') + PHONE_FALLBACK, true);
+        resetButton();
+      })
+      .catch(function () {
+        show('Your message could not be sent \u2014 check your connection and try again.' + PHONE_FALLBACK, true);
+        resetButton();
+      })
+      .finally(function () {
+        form.classList.remove('sending');
+      });
+  });
+
+  function resetButton() {
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
   }
 })();
 </script>
