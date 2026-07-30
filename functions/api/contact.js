@@ -33,7 +33,7 @@ const DEFAULT_FROM =
 const MAX_LENGTHS = { name: 120, email: 200, message: 5000 };
 
 const FALLBACK_ERROR =
-  "Something went wrong sending your message. Please call or text 509-540-3176 and I'll get right back to you.";
+  "Something went wrong sending your message. Please call or text (509) 800-7425 and I'll get right back to you.";
 
 export async function onRequestPost({ request, env }) {
   // The page's JavaScript posts JSON and renders the reply inline. If JS
@@ -79,7 +79,7 @@ export async function onRequestPost({ request, env }) {
         {
           ok: false,
           error:
-            "We couldn't verify you're human. Please refresh the page and try again, or call or text 509-540-3176.",
+            "We couldn't verify you're human. Please refresh the page and try again, or call or text (509) 800-7425.",
           retryable: true,
         },
         403
