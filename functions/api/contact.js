@@ -9,6 +9,16 @@
  *
  *   RESEND_API_KEY = re_xxxxxxxxxxxxxxxx
  *
+ * Strongly recommended (also an ENCRYPTED secret):
+ *
+ *   TURNSTILE_SECRET_KEY = 0x4AAAAAAA...
+ *
+ * NOTE: Turnstile verification FAILS OPEN. If TURNSTILE_SECRET_KEY is not
+ * set, submissions are accepted without a bot check rather than rejecting
+ * every visitor. That is deliberate — a misconfigured secret should not take
+ * the contact form offline. Check the Function logs for the warning if you
+ * suspect the check isn't running.
+ *
  * Optional plain-text overrides, only if you want to change the defaults:
  *
  *   CONTACT_TO    = Jacob@ellensburgtechguy.com
@@ -58,6 +68,23 @@ export async function onRequestPost({ request, env }) {
     if (!message) errors.push("Please tell me what you need help with.");
 
     if (errors.length) return respond({ ok: false, error: errors.join(" ") }, 400);
+
+    // ---- Bot check (Turnstile) ------------------------------------------
+    // Runs AFTER field validation on purpose: a Turnstile token is single-use,
+    // so a visitor with a typo in their email shouldn't burn theirs and have
+    // to re-solve a challenge.
+    const bot = await verifyTurnstile(request, env, body);
+    if (!bot.ok) {
+      return respond(
+        {
+          ok: false,
+          error:
+            "We couldn't verify you're human. Please refresh the page and try again, or call or text 509-540-3176.",
+          retryable: true,
+        },
+        403
+      );
+    }
 
     // ---- Config check ---------------------------------------------------
     const apiKey = env.RESEND_API_KEY;
@@ -150,6 +177,59 @@ async function readBody(request) {
     out[key] = typeof value === "string" ? value : "";
   }
   return out;
+}
+
+/**
+ * Validates the Cloudflare Turnstile token against the siteverify API.
+ *
+ * Fails OPEN when TURNSTILE_SECRET_KEY is absent: an unconfigured secret
+ * should never take the contact form offline. Fails CLOSED on every other
+ * path — missing token, rejected token, or siteverify being unreachable.
+ */
+async function verifyTurnstile(request, env, body) {
+  const secret = env.TURNSTILE_SECRET_KEY;
+
+  if (!secret) {
+    console.warn(
+      "contact: TURNSTILE_SECRET_KEY not set — accepting submission WITHOUT a bot check"
+    );
+    return { ok: true, skipped: true };
+  }
+
+  const token =
+    body["cf-turnstile-response"] || body.turnstileToken || body.token;
+
+  if (!token || typeof token !== "string") {
+    console.warn("contact: submission had no Turnstile token");
+    return { ok: false, reason: "missing-token" };
+  }
+
+  const form = new FormData();
+  form.append("secret", secret);
+  form.append("response", token);
+  const ip = request.headers.get("CF-Connecting-IP");
+  if (ip) form.append("remoteip", ip);
+
+  try {
+    const res = await fetch(
+      "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+      { method: "POST", body: form }
+    );
+    const data = await res.json();
+
+    if (!data.success) {
+      console.warn(
+        "contact: Turnstile rejected token:",
+        JSON.stringify(data["error-codes"] || [])
+      );
+      return { ok: false, reason: "rejected" };
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error("contact: Turnstile siteverify unreachable", err);
+    return { ok: false, reason: "siteverify-unreachable" };
+  }
 }
 
 function clean(value, maxLength) {
