@@ -127,11 +127,13 @@ h2{font-size:clamp(1.7rem,3.4vw,2.5rem)}
 
 /* ---- about ------------------------------------------------------- */
 .about{background:var(--paper);border-top:1px solid var(--line)}
-.about-grid{display:grid;grid-template-columns:1fr .82fr;gap:56px;align-items:start}
+.about-grid{display:grid;grid-template-columns:1fr .95fr;gap:52px;align-items:start}
 .about p+p{margin-top:16px}
-.photo-slot{border:2px dashed var(--line);border-radius:14px;aspect-ratio:4/5;display:flex;align-items:center;justify-content:center;text-align:center;padding:28px;color:var(--slate);font-size:.88rem;line-height:1.5}
+.photo-fig{margin:0}
+.photo-fig img{width:100%;height:auto;display:block;border-radius:14px;border:1px solid var(--line)}
+.photo-fig figcaption{margin-top:12px;font-size:.85rem;color:var(--slate);line-height:1.5}
 .area{margin-top:26px;padding:16px 20px;border-left:3px solid var(--amber);background:#fff;font-size:.95rem}
-@media(max-width:880px){.about-grid{grid-template-columns:1fr;gap:34px}.photo-slot{aspect-ratio:16/10}}
+@media(max-width:880px){.about-grid{grid-template-columns:1fr;gap:34px}}
 
 /* ---- contact ----------------------------------------------------- */
 .contact{background:var(--ink);color:#DCDCD6;border-top:2px solid var(--ink)}
@@ -396,7 +398,10 @@ footer a{color:var(--amber);text-decoration:none}
       <p>I work with homeowners, small offices, shops, farms and side hustles across the valley. If it needs a cable, a computer, a network, a camera, a workflow or an automation, I can map the job and get it done.</p>
       <div class="area"><strong>Service area:</strong> Ellensburg, Kittitas, Thorp, Cle Elum, Roslyn and nearby communities by request.</div>
     </div>
-    <div class="photo-slot">Photo of Jacob on a job goes here. A cable run, a camera install, or just you with the van. A real phone photo beats anything stock.</div>
+    <figure class="photo-fig">
+      <img src="photo-jacob.jpg" width="1400" height="1050" loading="lazy" alt="Jacob Schroeder standing in the snow in Antarctica, holding up a map of the continent, with a ship and icebergs in the bay behind him.">
+      <figcaption>Not a Kittitas Valley job site. Ask me about it sometime.</figcaption>
+    </figure>
   </div>
 </section>
 
